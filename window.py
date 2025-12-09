@@ -12,8 +12,6 @@ from OpenGL.GLU import *
 from model_loader import ModelLoader
 from gimbal_rings import create_ring_vertices
 
-#from model_loader import ModelLoader
-
 class Window:
     def __init__(self, width, height, title, model_path):
         self.width = width

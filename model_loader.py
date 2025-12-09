@@ -1,25 +1,64 @@
 from OpenGL.GL import *
+from PIL import Image
 
 import os
 
 class ModelLoader:
-    def __init__(self, filepath=None):
+    def __init__(self, obj_filepath=None, mtl_filepath=None):
         self.vertices = []
         self.faces = []
         self.normals = []
+        self.sex_coords = []
         self.has_model = False
+        self.texture_id = None
+        self.material = None
 
-        if filepath and os.path.exists(filepath):
-            self._load_obj(filepath)
-            print(f"Loaded: {filepath}")
+        if (obj_filepath and os.path.exists(obj_filepath)):
+            self._load_obj(obj_filepath)
+            if (os.path.exists(mtl_filepath)):
+                self._load_mtl(mtl_filepath)
+            print(f"Loaded: {obj_filepath}")
             self.has_model = True
         else:
-            print(f"{filepath}: Model not found")
+            print(f"{obj_filepath}: Model not found")
             print(f"Exiting")
             sys.exit()
-    
-    def _load_obj(self, filepath):
-        with open(filepath, 'r') as o:
+
+    def _load_texture(self, mtl_filepath):
+        try:
+            image = Image.open(mtl_filepath)
+            if image.mode != 'RGBA':
+                image = image.convert('RGBA')
+            # opengl expects origin at bottom left
+            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+            # make opengl texture
+            img_data = image.tobytes()
+            width, height = image.size
+            # set tex parameters
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+            # upload tex data to GPU (?)
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0, # mipmap level
+                GL_RGBA, # internal format
+                width,
+                height,
+                0, # border
+                GL_RGBA, # format
+                GL_UNSIGNED_BYTE, # data type
+                img_data
+            )
+            print(f"texture loaded")
+        except Exception as e:
+            print(f"failed to load texture: {e}")
+            self.texture_id = None
+
+    def _load_obj(self, obj_filepath):
+        with open(obj_filepath, 'r') as o:
             # read file
             for line in o:
                 print(f"loading info vertex:{line}")
