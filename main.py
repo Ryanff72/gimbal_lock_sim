@@ -9,13 +9,15 @@ def main():
     WIN_HEIGHT = 1100
     WINDOW_TITLE = "GimbleFlightSim"
     PLANE_OBJ_PATH = "assets/lowpolyplane.obj"
+    PLANE_MTL_PATH = "assets/airplane.mtl"
     print("init window")
     # init window
     window = Window(
         width=WIN_WIDTH,
         height=WIN_HEIGHT,
         title=WINDOW_TITLE,
-        model_path=PLANE_OBJ_PATH
+        model_path=PLANE_OBJ_PATH,
+        mtl_path=PLANE_MTL_PATH
     )
     print("run window")
     window.run()

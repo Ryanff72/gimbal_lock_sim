@@ -13,11 +13,12 @@ from model_loader import ModelLoader
 from gimbal_rings import create_ring_vertices
 
 class Window:
-    def __init__(self, width, height, title, model_path):
+    def __init__(self, width, height, title, model_path, mtl_path):
         self.width = width
         self.height = height
         self.title = title
         self.model_path = model_path
+        self.mtl_path = mtl_path
         self.running = True
         self.clock = pygame.time.Clock()
         self.fps = 60
@@ -42,7 +43,7 @@ class Window:
 
         # load model
         # this will return a model data structure
-        self.model = ModelLoader(model_path)
+        self.model = ModelLoader(model_path, mtl_path)
 
         # create rings
         self.ring_radius_outer = 150.0
@@ -78,6 +79,8 @@ class Window:
 
         # fix depth (make triangles drawn in front appear in front)
         glEnable(GL_DEPTH_TEST)
+        #enable textures
+        glEnable(GL_TEXTURE_2D)
         # pixel is allowed if its closer than whats there
         glDepthFunc(GL_LESS) 
         # matrix projection mode
@@ -135,8 +138,6 @@ class Window:
         #convert controls to rads
         azimuth_rad = math.radians(self.camera_azimuth)
         elevation_rad = math.radians(self.camera_elevation)
-        print(f"azimuth: degs : {self.camera_azimuth}, rads: {azimuth_rad}")
-        print(f"elevation: degs : {self.camera_elevation}, rads: {elevation_rad}")
 
         # sphere -> cartesian conversion
         x = self.camera_distance * math.cos(elevation_rad) * math.sin(azimuth_rad)
