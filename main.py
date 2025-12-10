@@ -5,19 +5,17 @@ from window import Window
 def main():
     print("init window")
     # CONFIGURATION
-    WIN_WIDTH = 1680
-    WIN_HEIGHT = 1100
+    WIN_WIDTH = 1280
+    WIN_HEIGHT = 780
     WINDOW_TITLE = "GimbleFlightSim"
-    PLANE_OBJ_PATH = "assets/lowpolyplane.obj"
+    PLANE_OBJ_PATH = "assets/rats.obj"
     PLANE_MTL_PATH = "assets/airplane.mtl"
-    print("init window")
+    PLANE_MTL_PATH = "assets/airplane.mtl"
     # init window
     window = Window(
         width=WIN_WIDTH,
         height=WIN_HEIGHT,
         title=WINDOW_TITLE,
-        model_path=PLANE_OBJ_PATH,
-        mtl_path=PLANE_MTL_PATH
     )
     print("run window")
     window.run()

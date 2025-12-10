@@ -11,31 +11,36 @@ from OpenGL.GLU import *
 
 from model_loader import ModelLoader
 from gimbal_rings import create_ring_vertices
+from quaternion import Quaternion
+
 
 class Window:
-    def __init__(self, width, height, title, model_path, mtl_path):
+    def __init__(self, width, height, title):
         self.width = width
         self.height = height
         self.title = title
-        self.model_path = model_path
-        self.mtl_path = mtl_path
         self.running = True
         self.clock = pygame.time.Clock()
         self.fps = 60
 
         # control settings
+        # steps for cam
         self.cam_step_rotate = 3
         self.cam_step_zoom = 1
         self.plane_step_rotate = 2
+        # steps for quat
+        self.i_quat = Quaternion(.95, .02, 0, 0)
+        self.j_quat = Quaternion(.95, 0, .02, 0)
+        self.k_quat = Quaternion(.95, 0, 0, .02)
 
         # in euclidean coordinates
-        self.in_quaternion = False
-
+        self.quaternion_mode = False
+        self.quaternion_default = Quaternion(1,1,0,0)
+        self.quaternion = self.quaternion_default
         # gimble lockable rotation
         self.plane_yaw = 0.0
         self.plane_pitch = 0.0
         self.plane_roll = 90.0
-
         # creates window
         self._init_pygame()
         # set up 3d rendering
@@ -43,7 +48,7 @@ class Window:
 
         # load model
         # this will return a model data structure
-        self.model = ModelLoader(model_path, mtl_path)
+        self.model = ModelLoader()
 
         # create rings
         self.ring_radius_outer = 150.0
@@ -179,18 +184,24 @@ class Window:
         # update plane
         # yaw
         if keys[K_i]:
+            self.quaternion = self.quaternion.times(self.i_quat)
             self.plane_yaw -= self.plane_step_rotate
         if keys[K_j]:
+            self.quaternion = self.quaternion.times(self.i_quat.inverse())
             self.plane_yaw += self.plane_step_rotate
         # pitch
         if keys[K_u]:
+            self.quaternion = self.quaternion.times(self.j_quat)
             self.plane_pitch -= self.plane_step_rotate
         if keys[K_h]:
+            self.quaternion = self.quaternion.times(self.j_quat.inverse())
             self.plane_pitch += self.plane_step_rotate
         # roll
         if keys[K_o]:
+            self.quaternion = self.quaternion.times(self.k_quat)
             self.plane_roll -= self.plane_step_rotate
         if keys[K_k]:
+            self.quaternion = self.quaternion.times(self.k_quat.inverse())
             self.plane_roll += self.plane_step_rotate
 
     """
@@ -209,13 +220,24 @@ class Window:
         # position camera
         self._update_camera()
         #gimbal rings, rotate with plane angles
-        self._draw_gimbal_rings()
+        if (not self.quaternion_mode):
+            self._draw_gimbal_rings()
         # draw everything we need to
         #rotate plane
         glPushMatrix()
-        glRotatef(self.plane_yaw, 0,0,1)
-        glRotatef(self.plane_pitch, 0,1,0)
-        glRotatef(self.plane_roll, 1,0,0)
+        if (self.quaternion_mode):
+            angle = 2 * math.acos(self.quaternion.r)
+            imag = math.sqrt(1 - (self.quaternion.r * self.quaternion.r))
+            if (imag <= .00001):
+                imag = 0.00001
+            glRotatef(180* angle / math.pi, 
+                      self.quaternion.i / imag, 
+                      self.quaternion.j / imag, 
+                      self.quaternion.k / imag)
+        else:
+            glRotatef(self.plane_yaw, 0,0,1)
+            glRotatef(self.plane_pitch, 0,1,0)
+            glRotatef(self.plane_roll, 1,0,0)
         self.model.render()
         glPopMatrix()
         self._draw_axes()
@@ -277,24 +299,38 @@ class Window:
         io = imgui.get_io()
         io.display_size = self.width, self.height
         imgui.new_frame()
-        # main control panel
         imgui.begin("Flight Controls", True)
-        if (not self.in_quaternion):
+        # main control panel
+        changed, self.quaternion_mode = imgui.checkbox("Use Quaternions", self.quaternion_mode)
+        if changed:
+            self.quaternion = self.quaternion_default
+            print("Quaternion mode" if self.quaternion_mode else "Euler mode")
+        imgui.separator()
+        if imgui.button("Reset Plane"):
+            self.quaternion = self.quaternion_default
+            self.plane_yaw = 0.0
+            self.plane_pitch = 0.0
+            self.plane_roll = 90.0
+        if imgui.button("Reset Camera"):
+            self.camera_distance = 150.0 # dist from origin
+            self.camera_azimuth = 0.0 # rotation about z axis
+            self.camera_elevation = 30.0 #angle above horizon (degs)
+        imgui.separator()
+        if (not self.quaternion_mode):
             imgui.text("Rotation Mode: Euler Angles")
-            imgui.separator()
             imgui.text(f"X: {abs(self.plane_pitch) % 360:.1f}")
             imgui.text(f"Y: {abs(self.plane_yaw) % 360:.1f}")
             imgui.text(f"Z: {abs(self.plane_roll) % 360:.1f}")
             if ((abs(self.plane_pitch) % 180) >= 86 and 
                 (abs(self.plane_pitch) % 180) <= 94):
                 imgui.separator()
-                imgui.text(f"WARNING!!!!!!!!")
-                imgui.text(f"you are gimble lock")
-
+                imgui.text(f"Gimbal Lock Detected!")
         else:
-            # TODO
-            #info about quaternion
-            pass
+            imgui.text("Rotation Mode: Quaternion")
+            imgui.text(f"Real: {self.quaternion.r:.4f}")
+            imgui.text(f"i:    {self.quaternion.i:.4f}")
+            imgui.text(f"j:    {self.quaternion.j:.4f}")
+            imgui.text(f"k:    {self.quaternion.k:.4f}")
         imgui.end()
         imgui.render()
         self.imgui_renderer.render(imgui.get_draw_data())

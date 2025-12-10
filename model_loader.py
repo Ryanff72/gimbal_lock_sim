@@ -4,8 +4,17 @@ from PIL import Image
 import os
 import sys
 
+OBJ_FILEPATH = "./assets/lowpolyplane.obj"
+MTL_FILEPATH = "./assets/airplane.mtl"
+DIFFUSE_FILEPATH = "./assets/textures/diffuse.dds"
+'''
+OBJ_FILEPATH = "./assets/rats.obj"
+MTL_FILEPATH = ""
+DIFFUSE_FILEPATH = ""
+'''
+
 class ModelLoader:
-    def __init__(self, obj_filepath=None, mtl_filepath=None):
+    def __init__(self):
         self.vertices = []
         self.faces = []
         self.normals = []
@@ -14,53 +23,75 @@ class ModelLoader:
         self.texture_id = None
         self.material = None
 
-        if (obj_filepath and os.path.exists(obj_filepath)):
-            self._load_obj(obj_filepath)
-            if (os.path.exists(mtl_filepath)):
-                self._load_mtl(obj_filepath, mtl_filepath)
-            print(f"Loaded: {obj_filepath}")
+        self.material = {
+            'diffuse': [0.8, 0.8, 0.8, 1.0],
+            'ambient': [0.2,0.2,0.2,1.0],
+            'specular': [0.0,0.0,0.0,1.0],
+            'shininess': 0.0
+        }
+
+        if (OBJ_FILEPATH and os.path.exists(OBJ_FILEPATH)):
+            self._load_obj(OBJ_FILEPATH)
+            if (os.path.exists(MTL_FILEPATH)):
+                self._load_mtl(OBJ_FILEPATH, MTL_FILEPATH)
+            print(f"Loaded: {OBJ_FILEPATH}")
             self.has_model = True
         else:
-            print(f"{obj_filepath}: Model not found")
+            print(f"{OBJ_FILEPATH}: Model not found")
             print(f"Exiting")
             sys.exit()
 
-    def _load_mtl(self, obj_filepath, mtl_filepath):
-        if not os.path.exists(mtl_filepath):
-            print(f"No MTL file found at {mtl_filepath}")
+    def _load_mtl(self, OBJ_FILEPATH, MTL_FILEPATH):
+        if not os.path.exists(MTL_FILEPATH):
+            print(f"No MTL file found at {MTL_FILEPATH}")
             return
 
-        print(f"loading mtl: {mtl_filepath}")
-
-        obj_dir = os.path.dirname(obj_filepath)
-
+        print(f"loading mtl: {MTL_FILEPATH}")
+        obj_dir = os.path.dirname(OBJ_FILEPATH)
         diffuse_map = None
-        with open(mtl_filepath, 'r') as f:
+
+        with open(MTL_FILEPATH, 'r') as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
                     continue
                 parts = line.split()
-                if parts[0] == 'map_Kd':
+                if parts[0] == 'Kd':
+                    self.material['diffuse'] = [float(parts[1]),
+                                           float(parts[2]),
+                                           float(parts[3]),
+                                           1.0]
+                elif parts[0] == 'Ka':
+                    self.material['ambient'] = [float(parts[1]),
+                                                float(parts[2]),
+                                                float(parts[3]),
+                                                1.0]
+                elif parts[0] == 'Ks':
+                    self.material['specular'] = [float(parts[1]),
+                                                float(parts[2]),
+                                                float(parts[3]),
+                                                1.0]
+                elif parts[0] == 'Ns':
+                    self.material['shininess'] = min(max(float(parts[1]),0.0), 128.0)
+                elif parts[0] == 'map_Kd':
                     texture_path = ' '.join(parts[1:])
                     texture_filename = os.path.basename(texture_path.replace('\\','/'))
-                    local_texture_path = "assets/textures/diffuse.dds"
-                    textures_dir_path = os.path.join(obj_filepath, 'textures', texture_filename)
+                    local_texture_path = DIFFUSE_FILEPATH
+                    textures_dir_path = os.path.join(obj_dir, 'textures', texture_filename)
 
-                    if os.path.exists(local_texture_path):
+                    if DIFFUSE_FILEPATH != "" and os.path.exists(local_texture_path):
                         diffuse_map = local_texture_path
                     elif os.path.exists(textures_dir_path):
                         diffuse_map = textures_dir_path
                     else:
                         print(f"texture not found: {texture_filename}")
-                        print(f" Tried: {local_texture_path}")
-                        print(f" Tried: {textures_dir_path}")
         if diffuse_map:
+            print("using diffuse")
             self._load_texture(diffuse_map)
 
-    def _load_texture(self, mtl_filepath):
+    def _load_texture(self, MTL_FILEPATH):
         try:
-            image = Image.open(mtl_filepath)
+            image = Image.open(MTL_FILEPATH)
             if image.mode != 'RGBA':
                 image = image.convert('RGBA')
             # opengl expects origin at bottom left
@@ -94,11 +125,10 @@ class ModelLoader:
             print(f"failed to load texture: {e}")
             self.texture_id = None
 
-    def _load_obj(self, obj_filepath):
-        with open(obj_filepath, 'r') as o:
+    def _load_obj(self, OBJ_FILEPATH):
+        with open(OBJ_FILEPATH, 'r') as o:
             # read file
             for line in o:
-                print(f"loading info vertex:{line}")
                 # strip whitespace
                 line = line.strip()
                 # skip empty lines
@@ -148,9 +178,14 @@ class ModelLoader:
         '''
         if not self.has_model:
             return
+        # apply material properties
+        if self.material:
+            glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, self.material['diffuse'])
+            glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, self.material['ambient'])
+            glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, self.material['specular'])
+            glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, self.material['shininess'])
         #check if textures 
         if (self.texture_id):
-            glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self.texture_id)
             glColor3f(1,1,1)
         else:
