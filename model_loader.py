@@ -4,14 +4,6 @@ from PIL import Image
 import os
 import sys
 
-OBJ_FILEPATH = "./assets/lowpolyplane.obj"
-MTL_FILEPATH = "./assets/airplane.mtl"
-DIFFUSE_FILEPATH = "./assets/textures/diffuse.dds"
-'''
-OBJ_FILEPATH = "./assets/rats.obj"
-MTL_FILEPATH = ""
-DIFFUSE_FILEPATH = ""
-'''
 
 class ModelLoader:
     def __init__(self):
@@ -21,7 +13,10 @@ class ModelLoader:
         self.tex_coords = []
         self.has_model = False
         self.texture_id = None
-        self.material = None
+
+        self.obj_filepath = "./assets/lowpolyplane.obj"
+        self.mtl_filepath = "./assets/airplane.mtl"
+        self.diffuse_filepath = "./assets/textures/diffuse.tga"
 
         self.material = {
             'diffuse': [0.8, 0.8, 0.8, 1.0],
@@ -30,27 +25,83 @@ class ModelLoader:
             'shininess': 0.0
         }
 
-        if (OBJ_FILEPATH and os.path.exists(OBJ_FILEPATH)):
-            self._load_obj(OBJ_FILEPATH)
-            if (os.path.exists(MTL_FILEPATH)):
-                self._load_mtl(OBJ_FILEPATH, MTL_FILEPATH)
-            print(f"Loaded: {OBJ_FILEPATH}")
+        self._load_model()
+
+    def _clear_model(self):
+        self.vertices = []
+        self.faces = []
+        self.normals = []
+        self.tex_coords = []
+        self.has_model = False
+        self.texture_id = None
+        self.material = {
+            'diffuse': [0.8, 0.8, 0.8, 1.0],
+            'ambient': [0.2,0.2,0.2,1.0],
+            'specular': [0.0,0.0,0.0,1.0],
+            'shininess': 0.0
+        }
+
+    def _load_model(self):
+        if (self.obj_filepath and os.path.exists(self.obj_filepath)):
+            self._load_obj()
+
+            if not self.tex_coords:
+                self._generate_uvs()
+
+            if (self.mtl_filepath and os.path.exists(self.mtl_filepath)):
+                self._load_mtl()
+            elif (self.diffuse_filepath and os.path.exists(self.diffuse_filepath)):
+                self._load_texture()
+            print(f"Loaded: {self.obj_filepath}")
             self.has_model = True
         else:
-            print(f"{OBJ_FILEPATH}: Model not found")
+            print(f"{self.obj_filepath}: Model not found")
             print(f"Exiting")
             sys.exit()
 
-    def _load_mtl(self, OBJ_FILEPATH, MTL_FILEPATH):
-        if not os.path.exists(MTL_FILEPATH):
-            print(f"No MTL file found at {MTL_FILEPATH}")
+    def set_config(self,config):
+        self.obj_filepath = config[0]
+        self.mtl_filepath = config[1]
+        self.diffuse_filepath = config[2]
+        self._clear_model()
+        self._load_model()
+
+    def _generate_uvs(self):
+        if not self.vertices:
+            return
+        # find bounds
+        min_x = min(v[0] for v in self.vertices)
+        max_x = max(v[0] for v in self.vertices)
+        min_z = min(v[2] for v in self.vertices)
+        max_z = max(v[2] for v in self.vertices)
+        
+        range_x = max_x - min_x if max_x != min_x else 1.0
+        range_z = max_z - min_z if max_z != min_z else 1.0
+        
+        # make uvs for each vertex
+        self.tex_coords = []
+        for vertex in self.vertices:
+            u = (vertex[0] - min_x) / range_x
+            v = (vertex[2] - min_z) / range_z
+            self.tex_coords.append([u, v])
+        
+        # make faces use uvs 
+        for face in self.faces:
+            verts = face['vertices']
+            face['texcoords'] = verts  # Use same indices as vertices
+        
+        print(f"Generated {len(self.tex_coords)} UV coordinates")
+
+    def _load_mtl(self):
+        if not os.path.exists(self.mtl_filepath):
+            print(f"No MTL file found at {self.mtl_filepath}")
             return
 
-        print(f"loading mtl: {MTL_FILEPATH}")
-        obj_dir = os.path.dirname(OBJ_FILEPATH)
+        print(f"loading mtl: {self.mtl_filepath}")
+        obj_dir = os.path.dirname(self.obj_filepath)
         diffuse_map = None
 
-        with open(MTL_FILEPATH, 'r') as f:
+        with open(self.mtl_filepath, 'r', encoding='utf-8', errors='ignore') as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
@@ -76,22 +127,23 @@ class ModelLoader:
                 elif parts[0] == 'map_Kd':
                     texture_path = ' '.join(parts[1:])
                     texture_filename = os.path.basename(texture_path.replace('\\','/'))
-                    local_texture_path = DIFFUSE_FILEPATH
-                    textures_dir_path = os.path.join(obj_dir, 'textures', texture_filename)
-
-                    if DIFFUSE_FILEPATH != "" and os.path.exists(local_texture_path):
-                        diffuse_map = local_texture_path
-                    elif os.path.exists(textures_dir_path):
-                        diffuse_map = textures_dir_path
+                    if self.diffuse_filepath and os.path.exists(self.diffuse_filepath):
+                        diffuse_map = self.diffuse_filepath
                     else:
-                        print(f"texture not found: {texture_filename}")
+                        textures_dir_path = os.path.join(obj_dir, 'textures', texture_filename)
+                        if os.path.exists(textures_dir_path):
+                            diffuse_map = textures_dir_path
+                        else:
+                            print(f"texture not found: {texture_filename}")
         if diffuse_map:
             print("using diffuse")
-            self._load_texture(diffuse_map)
+            self._load_texture()
 
-    def _load_texture(self, MTL_FILEPATH):
+    def _load_texture(self):
+        if not self.diffuse_filepath or not os.path.exists(self.diffuse_filepath):
+            return
         try:
-            image = Image.open(MTL_FILEPATH)
+            image = Image.open(self.diffuse_filepath)
             if image.mode != 'RGBA':
                 image = image.convert('RGBA')
             # opengl expects origin at bottom left
@@ -125,14 +177,17 @@ class ModelLoader:
             print(f"failed to load texture: {e}")
             self.texture_id = None
 
-    def _load_obj(self, OBJ_FILEPATH):
-        with open(OBJ_FILEPATH, 'r') as o:
+    def _load_obj(self):
+        with open(self.obj_filepath, 'r') as o:
             # read file
             for line in o:
                 # strip whitespace
                 line = line.strip()
                 # skip empty lines
-                if not line or line.startswith('#'):
+                if (not line or 
+                    line.startswith('usemtl') or 
+                    line.startswith('g') or
+                    line.startswith('#')):
                     continue
                 parts = line.split()
                 if parts[0] == 'v':
@@ -152,6 +207,7 @@ class ModelLoader:
                 elif parts[0] == "f":
                     face_verts = []
                     face_texs = []
+                    face_norms = []
                     for vertex_data in parts[1:]:
                         indices = vertex_data.split('/')
                         vertex_index = int(indices[0]) - 1
@@ -159,11 +215,27 @@ class ModelLoader:
                         if len(indices) > 1 and indices[1]:
                             tex_index = int(indices[1]) - 1
                             face_texs.append(tex_index)
+                        if len(indices) > 2 and indices[2]:
+                            norm_index = int(indices[2]) - 1
+                            face_norms.append(norm_index)
                     if len(face_verts) == 3:
                         self.faces.append({
                             'vertices': face_verts,
                             'texcoords': face_texs if face_texs else None
                         })
+                    elif len(face_verts) == 4:
+                        self.faces.append({
+                            'vertices': [face_verts[0], face_verts[1], face_verts[2]],
+                            'texcoords': [face_texs[0], face_texs[1], face_texs[2]] if face_texs else None,
+                            'normals': [face_norms[0], face_norms[1], face_norms[2]] if face_norms else None
+                        })
+                        self.faces.append({
+                            'vertices': [face_verts[0], face_verts[2], face_verts[3]],
+                            'texcoords': [face_texs[0], face_texs[2], face_texs[3]] if face_texs else None,
+                            'normals': [face_norms[0], face_norms[2], face_norms[3]] if face_norms else None
+                        })
+                elif parts[0] == 'l':
+                    continue
         self.has_model = True
 
     def render(self):
@@ -178,6 +250,8 @@ class ModelLoader:
         '''
         if not self.has_model:
             return
+        # show all faces
+        glDisable(GL_CULL_FACE)
         # apply material properties
         if self.material:
             glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, self.material['diffuse'])

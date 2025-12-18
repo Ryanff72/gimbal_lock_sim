@@ -13,6 +13,10 @@ from model_loader import ModelLoader
 from gimbal_rings import create_ring_vertices
 from quaternion import Quaternion
 
+MODEL_CONFIGS = {
+                "plane" : ["./assets/lowpolyplane.obj", "./assets/textures/diffuse.tga", "./assets/airplane.mtl"],
+                 "rat" : ["./assets/rat.obj", None, "./assets/textures/rat_khaki.tga"]
+                }
 
 class Window:
     def __init__(self, width, height, title):
@@ -244,7 +248,7 @@ class Window:
         #gui
         self._render_gui()
         io = imgui.get_io()
-        io.font_global_scale = 2.5
+        io.font_global_scale = 1.867
         io.display_size = self.width, self.height
         #initally we drew to a hidden 'back buffer'
         # this swaps it to the front buffer
@@ -306,7 +310,11 @@ class Window:
             self.quaternion = self.quaternion_default
             print("Quaternion mode" if self.quaternion_mode else "Euler mode")
         imgui.separator()
-        if imgui.button("Reset Plane"):
+        if imgui.button("Plane"):
+            self.model.set_config(MODEL_CONFIGS["plane"])
+        if imgui.button("Rat"):
+            self.model.set_config(MODEL_CONFIGS["rat"])
+        if imgui.button("Reset Object"):
             self.quaternion = self.quaternion_default
             self.plane_yaw = 0.0
             self.plane_pitch = 0.0
